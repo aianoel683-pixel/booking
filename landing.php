@@ -13,21 +13,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $password_hash = $password !== '' ? password_hash($password, PASSWORD_DEFAULT) : null;
     if ($first_name !== '' && $last_name !== '') {
         try {
-            $db->query("SELECT username,password_hash FROM guests LIMIT 1");
-        } catch (Throwable $e) {
-            try { $db->exec("ALTER TABLE guests ADD COLUMN username VARCHAR(50) NULL, ADD COLUMN password_hash VARCHAR(255) NULL"); } catch (Throwable $e2) {}
-        }
-        try {
+            if (!$db) { throw new Exception('no_db'); }
+            $db->exec("CREATE TABLE IF NOT EXISTS guests (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                first_name VARCHAR(50) NOT NULL,
+                last_name VARCHAR(50) NOT NULL,
+                email VARCHAR(100),
+                phone VARCHAR(20),
+                address TEXT,
+                id_type VARCHAR(50),
+                id_number VARCHAR(50),
+                id_photo_url VARCHAR(255),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )");
+            try { $db->query("SELECT username,password_hash FROM guests LIMIT 1"); } catch (Throwable $e) { try { $db->exec("ALTER TABLE guests ADD COLUMN username VARCHAR(50) NULL, ADD COLUMN password_hash VARCHAR(255) NULL"); } catch (Throwable $e2) {} }
             $stmt = $db->prepare("INSERT INTO guests (first_name,last_name,email,phone,address,username,password_hash) VALUES (:fn,:ln,:em,:ph,:ad,:un,:pw)");
             $stmt->execute([':fn' => $first_name, ':ln' => $last_name, ':em' => $email, ':ph' => $phone, ':ad' => $address, ':un' => ($username!==''?$username:null), ':pw' => $password_hash]);
+            $_SESSION['registered_guest_id'] = (int)$db->lastInsertId();
+            $_SESSION['registered_guest_name'] = $first_name . ' ' . $last_name;
+            header('Location: guest/dashboard.php');
+            exit();
         } catch (Throwable $e) {
-            $stmt = $db->prepare("INSERT INTO guests (first_name,last_name,email,phone,address) VALUES (:fn,:ln,:em,:ph,:ad)");
-            $stmt->execute([':fn' => $first_name, ':ln' => $last_name, ':em' => $email, ':ph' => $phone, ':ad' => $address]);
+            $_SESSION['landing_error'] = 'Registration failed';
+            header('Location: landing.php?error=1');
+            exit();
         }
-        $_SESSION['registered_guest_id'] = (int)$db->lastInsertId();
-        $_SESSION['registered_guest_name'] = $first_name . ' ' . $last_name;
-        header('Location: guest/dashboard.php');
-        exit();
     }
 }
 ?><!DOCTYPE html>
